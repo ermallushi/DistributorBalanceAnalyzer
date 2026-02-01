@@ -22,7 +22,7 @@ public class DistributorBalanceAnalyzer
             NetChange = data.TotalCredits - data.TotalDebits,
             TransactionCount = data.TransactionCount,
             LastTransactionDate = data.LastTransactionDate,
-            GeneratedAt = DateTime.Now
+            GeneratedAt = DateTime.UtcNow
         };
 
         // Calculate scenarios for different time windows
@@ -81,7 +81,7 @@ public class DistributorBalanceAnalyzer
         if (scenario.DailyBurnRate > 0)
         {
             scenario.DaysRemaining = (int)(currentBalance / scenario.DailyBurnRate);
-            scenario.DepletionDate = DateTime.Now.AddDays(scenario.DaysRemaining);
+            scenario.DepletionDate = DateTime.UtcNow.AddDays(scenario.DaysRemaining);
         }
         else
         {
@@ -142,7 +142,7 @@ public class DistributorBalanceAnalyzer
             if (scenario.DailyBurnRate > 0)
             {
                 scenario.DaysRemaining = (int)(projection.CurrentBalance / scenario.DailyBurnRate);
-                scenario.DepletionDate = DateTime.Now.AddDays(scenario.DaysRemaining);
+                scenario.DepletionDate = DateTime.UtcNow.AddDays(scenario.DaysRemaining);
             }
             else
             {

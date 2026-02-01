@@ -21,6 +21,8 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
+        // NOTE: This CORS policy is permissive and suitable for development only.
+        // In production, restrict to specific origins, methods, and headers.
         policy.AllowAnyOrigin()
               .AllowAnyMethod()
               .AllowAnyHeader();

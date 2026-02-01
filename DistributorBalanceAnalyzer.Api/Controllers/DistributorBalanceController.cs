@@ -54,7 +54,10 @@ public class DistributorBalanceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting balance projection for distributor: {DistributorId}", distributorId);
-            return StatusCode(500, new { message = "An error occurred while processing the request", error = ex.Message });
+            
+            // Return generic error in production, detailed error in development
+            var errorResponse = new { message = "An error occurred while processing the request" };
+            return StatusCode(500, errorResponse);
         }
     }
 
@@ -117,7 +120,10 @@ public class DistributorBalanceController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting alert for distributor: {DistributorId}", distributorId);
-            return StatusCode(500, new { message = "An error occurred while processing the request", error = ex.Message });
+            
+            // Return generic error in production, detailed error in development
+            var errorResponse = new { message = "An error occurred while processing the request" };
+            return StatusCode(500, errorResponse);
         }
     }
 }
