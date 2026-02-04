@@ -54,9 +54,7 @@ public class DistributorBalanceRepository
                 MAX(CASE WHEN t.balanceeffect = 'DR' AND t.transactiondate >= SYSDATE - 90 
                          THEN t.transactiondate END) as last_debit_90d
             FROM TBLTCREDITBALANCETRANSACTION t
-            WHERE t.transactiondate >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12)
-              AND t.transactiondate <= SYSDATE
-              AND t.entityid = :distributorId
+            WHERE t.entityid = :distributorId
             GROUP BY t.entityid";
 
         using var command = new OracleCommand(sql, connection);
@@ -216,8 +214,6 @@ public class DistributorBalanceRepository
                 SUM(CASE WHEN t.balanceeffect = 'CR' THEN t.amount ELSE 0 END) / 1000000 as total_credits
             FROM TBLTCREDITBALANCETRANSACTION t
             WHERE t.entityid IN ({entityIdList})
-              AND t.transactiondate >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12)
-              AND t.transactiondate <= SYSDATE
             GROUP BY t.entityid";
 
         using var command = new OracleCommand(sql, connection);
