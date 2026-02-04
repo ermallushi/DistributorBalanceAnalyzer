@@ -111,6 +111,143 @@ public class DistributorBalanceRepository
     }
 
     /// <summary>
+    /// Gets all entities in a distributor's hierarchy grouped by level
+    /// </summary>
+    public async Task<List<HierarchyLevelBalance>> GetHierarchyLevelsAsync(string distributorId, int maxLevels = 5)
+    {
+        var levels = new List<HierarchyLevelBalance>();
+        
+        using var connection = new OracleConnection(_connectionString);
+        await connection.OpenAsync();
+
+        // Use Oracle hierarchical query to get all descendants organized by level
+        // This assumes tblmaccount has parentaccountid column for hierarchy
+        // If the schema is different, this query will need adjustment
+        var hierarchySql = @"
+            SELECT LEVEL as hierarchy_level, accountid
+            FROM tblmaccount
+            START WITH accountid = :distributorId
+            CONNECT BY PRIOR accountid = parentaccountid
+            AND LEVEL <= :maxLevels
+            ORDER BY LEVEL, accountid";
+
+        try
+        {
+            using var hierarchyCommand = new OracleCommand(hierarchySql, connection);
+            hierarchyCommand.Parameters.Add("distributorId", OracleDbType.Varchar2).Value = distributorId;
+            hierarchyCommand.Parameters.Add("maxLevels", OracleDbType.Int32).Value = maxLevels;
+
+            var entitiesByLevel = new Dictionary<int, List<string>>();
+            
+            using var hierarchyReader = await hierarchyCommand.ExecuteReaderAsync();
+            while (await hierarchyReader.ReadAsync())
+            {
+                var level = hierarchyReader.GetInt32(0);
+                var entityId = hierarchyReader.GetString(1);
+                
+                if (!entitiesByLevel.ContainsKey(level))
+                {
+                    entitiesByLevel[level] = new List<string>();
+                }
+                entitiesByLevel[level].Add(entityId);
+            }
+
+            // For each level, get aggregated balance data
+            foreach (var levelGroup in entitiesByLevel.OrderBy(kvp => kvp.Key))
+            {
+                var level = levelGroup.Key;
+                var entityIds = levelGroup.Value;
+
+                var balanceData = await GetAggregatedBalanceForEntitiesAsync(connection, entityIds);
+                
+                levels.Add(new HierarchyLevelBalance
+                {
+                    Level = level,
+                    LevelDescription = GetLevelDescription(level),
+                    EntityCount = entityIds.Count,
+                    EntityIds = entityIds,
+                    TotalBalance = balanceData.TotalBalance,
+                    TotalDebits = balanceData.TotalDebits,
+                    TotalCredits = balanceData.TotalCredits
+                });
+            }
+        }
+        catch (Oracle.ManagedDataAccess.Client.OracleException)
+        {
+            // If hierarchy query fails (e.g., parentaccountid column doesn't exist),
+            // return single level with just the distributor
+            levels.Add(new HierarchyLevelBalance
+            {
+                Level = 1,
+                LevelDescription = "Distributor (Own Balance)",
+                EntityCount = 1,
+                EntityIds = new List<string> { distributorId },
+                TotalBalance = 0,
+                TotalDebits = 0,
+                TotalCredits = 0
+            });
+            
+            // Get actual balance for this single entity
+            var singleBalance = await GetDistributorBalanceDataAsync(distributorId);
+            if (singleBalance != null)
+            {
+                levels[0].TotalBalance = singleBalance.CurrentBalance;
+                levels[0].TotalDebits = singleBalance.TotalDebits;
+                levels[0].TotalCredits = singleBalance.TotalCredits;
+            }
+        }
+
+        return levels;
+    }
+
+    private async Task<(decimal TotalBalance, decimal TotalDebits, decimal TotalCredits)> GetAggregatedBalanceForEntitiesAsync(
+        OracleConnection connection, List<string> entityIds)
+    {
+        if (!entityIds.Any())
+            return (0, 0, 0);
+
+        var entityIdList = string.Join(",", entityIds.Select(id => $"'{id}'"));
+        
+        var sql = $@"
+            SELECT 
+                SUM(MAX(t.newbalance) KEEP (DENSE_RANK LAST ORDER BY t.transactiondate)) / 1000000 as total_balance,
+                SUM(CASE WHEN t.balanceeffect = 'DR' THEN t.amount ELSE 0 END) / 1000000 as total_debits,
+                SUM(CASE WHEN t.balanceeffect = 'CR' THEN t.amount ELSE 0 END) / 1000000 as total_credits
+            FROM TBLTCREDITBALANCETRANSACTION t
+            WHERE t.entityid IN ({entityIdList})
+              AND t.transactiondate >= ADD_MONTHS(TRUNC(SYSDATE, 'YYYY'), -12)
+              AND t.transactiondate <= SYSDATE
+            GROUP BY t.entityid";
+
+        using var command = new OracleCommand(sql, connection);
+        using var reader = await command.ExecuteReaderAsync();
+        
+        decimal totalBalance = 0, totalDebits = 0, totalCredits = 0;
+        
+        while (await reader.ReadAsync())
+        {
+            totalBalance += reader.IsDBNull(0) ? 0 : reader.GetDecimal(0);
+            totalDebits += reader.IsDBNull(1) ? 0 : reader.GetDecimal(1);
+            totalCredits += reader.IsDBNull(2) ? 0 : reader.GetDecimal(2);
+        }
+
+        return (totalBalance, totalDebits, totalCredits);
+    }
+
+    private string GetLevelDescription(int level)
+    {
+        return level switch
+        {
+            1 => "Level 1 (Distributor - Own Balance)",
+            2 => "Level 2 (Direct Sub-Distributors)",
+            3 => "Level 3 (Indirect Sub-Distributors)",
+            4 => "Level 4 (Third-Level Network)",
+            5 => "Level 5 (Fourth-Level Network)",
+            _ => $"Level {level}"
+        };
+    }
+
+    /// <summary>
     /// Gets raw transaction history for ML training
     /// </summary>
     public async Task<List<BalanceTransaction>> GetRawTransactionsAsync(string entityId, string? balanceEffect = null, int daysBack = 365)

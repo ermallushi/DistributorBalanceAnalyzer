@@ -9,22 +9,29 @@ This application complements the traditional mathematical balance analyzer with 
 - **Credit Pattern Prediction**: Forecasts when the next credit top-up will occur and its amount
 - **Anomaly Detection**: Identifies unusual spending spikes and deviations from historical patterns
 - **Smart Depletion Forecast**: Combines mathematical burn rate with ML predictions for accurate balance projections
+- **Hierarchical Analysis**: Analyzes balance and predictions across all levels of the distributor hierarchy
 
 ## Features
 
-### 1. Credit Pattern Prediction
+### 1. Hierarchical Level Analysis
+- **Multi-Level Support**: Analyzes distributor hierarchies from Level 1 (own balance) through multiple sub-distributor levels
+- **Per-Level Predictions**: ML predictions and anomaly detection for each hierarchy level
+- **Aggregate Views**: Shows total entities, balances, debits, and credits per level
+- **Entity Details**: Displays individual entity analysis within each level
+
+### 2. Credit Pattern Prediction
 - Predicts the next 5 credit top-up events
 - Uses SSA (Singular Spectrum Analysis) time-series forecasting
 - Provides confidence scores for each prediction
 - Learns seasonal patterns from historical data
 
-### 2. Anomaly Detection
+### 3. Anomaly Detection
 - Detects unusual spending spikes
 - Identifies abnormal transaction patterns
 - Alerts on deviations from historical behavior
 - Highlights recent anomalies (last 30 days)
 
-### 3. Smart Depletion Forecast
+### 4. Smart Depletion Forecast
 - Combines mathematical burn rate with ML credit predictions
 - Adjusts depletion date based on predicted credits
 - Calculates whether balance will actually deplete
@@ -51,15 +58,28 @@ dotnet run --project DistributorBalanceAnalyzer.ML.Console
 
 ## Output
 
-The application displays:
+The application displays hierarchical analysis:
 
-1. **Traditional Mathematical Analysis**: Current balance, burn rate, and depletion date
-2. **ML-Enhanced Predictions**: 
-   - Next credit prediction with date, amount, and confidence
-   - Upcoming 5 credits forecast
-   - Smart depletion forecast (mathematical vs ML-adjusted)
-3. **Spending Anomalies**: Recent unusual spending patterns
-4. **Recommendation**: Actionable advice based on ML analysis
+1. **Hierarchy Overview**: Shows total levels found and entity count
+2. **Per-Level Analysis**: 
+   - Level description (e.g., "Level 1 - Distributor Own Balance")
+   - Entity count at this level
+   - Aggregated totals (balance, debits, credits)
+3. **Entity-Level ML Predictions** (for each entity in the level):
+   - Current balance and burn rate
+   - Next credit prediction with confidence
+   - Smart depletion forecast
+   - Recent anomalies count
+4. **Performance Summary**: Total analysis time
+
+### Hierarchy Levels
+
+- **Level 1**: Distributor's own balance (direct account)
+- **Level 2**: Direct sub-distributors (first-tier network)
+- **Level 3**: Indirect sub-distributors (second-tier network)
+- **Level 4+**: Additional network levels (if present)
+
+The application automatically detects the hierarchy structure using Oracle's `CONNECT BY` hierarchical queries. If no hierarchy exists (single-level structure), it analyzes only the distributor's own balance.
 
 ## Requirements
 
@@ -121,56 +141,92 @@ DistributorBalanceAnalyzer.ML.Console/
 
 Analyzing distributor: ACC000008528...
 
-🤖 Preparing ML training data...
-   ✓ Found 45 historical credits
-   ✓ Found 87 days of spending data
-
-🤖 Training ML models...
-✓ Analysis completed in 1234ms
+📊 Analyzing hierarchy structure...
+   ✓ Found 3 hierarchy level(s)
+   ✓ Total entities: 15
 
 ═══════════════════════════════════════════════════════════
-  TRADITIONAL MATHEMATICAL ANALYSIS
+  LEVEL 1 (DISTRIBUTOR - OWN BALANCE)
 ═══════════════════════════════════════════════════════════
-Current Balance: 125,000.00
-Daily Burn Rate: 1,250.00
-Days Remaining: 100
-Depletion Date: 2026-05-15
+Entities in this level: 1
+Total Balance: 125,000.00
+Total Debits: 450,000.00
+Total Credits: 575,000.00
+
+  Entity: ACC000008528
+     Balance: 125,000.00
+     Burn Rate: 1,250.00/day
+     🤖 Next Credit: 2026-03-15 - 50,000.00 (85%)
+     ✅ Healthy (maintained by predicted credits)
 
 ═══════════════════════════════════════════════════════════
-  🤖 ML-ENHANCED PREDICTIONS
+  LEVEL 2 (DIRECT SUB-DISTRIBUTORS)
 ═══════════════════════════════════════════════════════════
-📈 Next Credit Prediction:
-   Date: 2026-03-15
-   Amount: 50,000.00
-   Confidence: 85%
+Entities in this level: 5
+Total Balance: 345,000.00
+Total Debits: 1,250,000.00
+Total Credits: 1,595,000.00
 
-📈 Upcoming Credits (Next 5):
-   2026-03-15 - 50,000.00 (Confidence: 95%)
-   2026-04-15 - 48,500.00 (Confidence: 81%)
-   2026-05-15 - 51,200.00 (Confidence: 69%)
-   2026-06-15 - 49,800.00 (Confidence: 58%)
-   2026-07-15 - 50,100.00 (Confidence: 50%)
+  Entity: ACC000012345
+     Balance: 85,000.00
+     Burn Rate: 950.00/day
+     🤖 Next Credit: 2026-03-20 - 45,000.00 (78%)
+     ✅ Healthy (maintained by predicted credits)
 
-🎯 Smart Depletion Forecast:
-   Mathematical: 2026-05-15
-   ML-Adjusted: Will not deplete
-   Will Deplete: ✅ NO
-   Balance will be maintained with predicted credits
+  Entity: ACC000012346
+     Balance: 62,000.00
+     Burn Rate: 820.00/day
+     🤖 Next Credit: 2026-03-18 - 38,000.00 (82%)
+     ⚠️  Depletion: 2026-05-22
+     ⚠️  2 spending anomalies detected (last 30 days)
 
-⚠️  Spending Anomalies Detected (Last 30 Days):
-   2026-01-28 - Unusual spending pattern (Score: 2.45)
-   2026-01-15 - Unusual spending pattern (Score: 1.89)
+  Entity: ACC000012347
+     Balance: 103,000.00
+     Burn Rate: 1,100.00/day
+     🤖 Next Credit: 2026-03-25 - 52,000.00 (80%)
+     ✅ Healthy (maintained by predicted credits)
+
+   ... and 2 more entities in Level 2 (Direct Sub-Distributors)
 
 ═══════════════════════════════════════════════════════════
-  💡 RECOMMENDATION
+  LEVEL 3 (INDIRECT SUB-DISTRIBUTORS)
 ═══════════════════════════════════════════════════════════
-✅ Balance is healthy with predicted credit patterns
-   Next top-up expected: 2026-03-15
+Entities in this level: 9
+Total Balance: 523,000.00
+Total Debits: 2,850,000.00
+Total Credits: 3,373,000.00
+
+  Entity: ACC000023451
+     Balance: 48,000.00
+     Burn Rate: 650.00/day
+     (Insufficient data for ML: 8 credits)
+
+  Entity: ACC000023452
+     Balance: 67,000.00
+     Burn Rate: 780.00/day
+     🤖 Next Credit: 2026-03-22 - 35,000.00 (75%)
+     ✅ Healthy (maintained by predicted credits)
+
+  Entity: ACC000023453
+     Balance: 91,000.00
+     Burn Rate: 920.00/day
+     🤖 Next Credit: 2026-03-28 - 48,000.00 (73%)
+     ✅ Healthy (maintained by predicted credits)
+     ⚠️  1 spending anomalies detected (last 30 days)
+
+   ... and 6 more entities in Level 3 (Indirect Sub-Distributors)
+
+═══════════════════════════════════════════════════════════
+✓ Complete hierarchy analysis finished in 3842ms
+═══════════════════════════════════════════════════════════
 ```
 
 ## Notes
 
+- **Hierarchy Detection**: The system uses Oracle's `CONNECT BY` to traverse parent-child relationships in `tblmaccount`
+- **Graceful Fallback**: If the database doesn't support hierarchy (no `parentaccountid` column), the system analyzes only the distributor's own balance (single level)
 - ML models require sufficient historical data for accurate predictions (minimum 10 credits)
 - Confidence scores decrease for longer-term predictions
 - Anomaly detection requires at least 30 days of transaction data
 - The smart depletion forecast simulates up to 365 days into the future
+- Per-level analysis shows first 3 entities per level to keep output manageable

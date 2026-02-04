@@ -34,106 +34,144 @@ namespace DistributorBalanceAnalyzer.ML.Console
             var stopwatch = Stopwatch.StartNew();
             System.Console.WriteLine($"Analyzing distributor: {distributorId}...\n");
 
-            var distributorBalance = await balanceService.GetDistributorBalanceProjectionAsync(distributorId);
+            // Get hierarchy levels
+            System.Console.WriteLine("📊 Analyzing hierarchy structure...");
+            var hierarchyLevels = await repository.GetHierarchyLevelsAsync(distributorId);
+            
+            System.Console.WriteLine($"   ✓ Found {hierarchyLevels.Count} hierarchy level(s)");
+            System.Console.WriteLine($"   ✓ Total entities: {hierarchyLevels.Sum(l => l.EntityCount)}");
+            System.Console.WriteLine();
+
+            // Analyze each level
+            foreach (var level in hierarchyLevels)
+            {
+                System.Console.WriteLine("═══════════════════════════════════════════════════════════");
+                System.Console.ForegroundColor = ConsoleColor.Cyan;
+                System.Console.WriteLine($"  {level.LevelDescription.ToUpper()}");
+                System.Console.ResetColor();
+                System.Console.WriteLine("═══════════════════════════════════════════════════════════");
+                System.Console.WriteLine($"Entities in this level: {level.EntityCount}");
+                System.Console.WriteLine($"Total Balance: {level.TotalBalance:N2}");
+                System.Console.WriteLine($"Total Debits: {level.TotalDebits:N2}");
+                System.Console.WriteLine($"Total Credits: {level.TotalCredits:N2}");
+                System.Console.WriteLine();
+
+                // For each entity in the level, perform ML analysis
+                foreach (var entityId in level.EntityIds.Take(3)) // Show first 3 entities per level
+                {
+                    await AnalyzeEntityAsync(
+                        entityId,
+                        repository,
+                        balanceService,
+                        dataPrep,
+                        creditPredictor,
+                        anomalyDetector,
+                        smartDepletion,
+                        level.Level);
+                }
+
+                if (level.EntityCount > 3)
+                {
+                    System.Console.ForegroundColor = ConsoleColor.DarkGray;
+                    System.Console.WriteLine($"   ... and {level.EntityCount - 3} more entities in {level.LevelDescription}");
+                    System.Console.ResetColor();
+                    System.Console.WriteLine();
+                }
+            }
+
+            stopwatch.Stop();
+            
+            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
+            System.Console.ForegroundColor = ConsoleColor.Green;
+            System.Console.WriteLine($"✓ Complete hierarchy analysis finished in {stopwatch.ElapsedMilliseconds}ms");
+            System.Console.ResetColor();
+            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
+            
+            System.Console.WriteLine("\nPress any key to exit...");
+            System.Console.ReadKey();
+        }
+
+        static async Task AnalyzeEntityAsync(
+            string entityId,
+            DistributorBalanceRepository repository,
+            DistributorBalanceService balanceService,
+            MLDataPreparationService dataPrep,
+            CreditPredictionService creditPredictor,
+            AnomalyDetectionService anomalyDetector,
+            SmartDepletionService smartDepletion,
+            int level)
+        {
+            System.Console.ForegroundColor = ConsoleColor.Yellow;
+            System.Console.WriteLine($"  Entity: {entityId}");
+            System.Console.ResetColor();
+
+            var distributorBalance = await balanceService.GetDistributorBalanceProjectionAsync(entityId);
             
             if (distributorBalance == null)
             {
-                System.Console.WriteLine("❌ No balance data found for distributor.");
+                System.Console.ForegroundColor = ConsoleColor.DarkGray;
+                System.Console.WriteLine("     (No balance data available)");
+                System.Console.ResetColor();
                 return;
             }
 
-            System.Console.WriteLine("🤖 Preparing ML training data...");
-            var creditHistory = await dataPrep.PrepareCreditDataAsync(distributorId);
-            var spendingHistory = await dataPrep.PrepareSpendingDataAsync(distributorId);
-
-            System.Console.WriteLine($"   ✓ Found {creditHistory.Count} historical credits");
-            System.Console.WriteLine($"   ✓ Found {spendingHistory.Count} days of spending data");
-            System.Console.WriteLine();
-
-            System.Console.WriteLine("🤖 Training ML models...");
+            System.Console.WriteLine($"     Balance: {distributorBalance.CurrentBalance:N2}");
+            System.Console.WriteLine($"     Burn Rate: {distributorBalance.RecommendedScenario?.DailyBurnRate:N2}/day");
             
-            var nextCreditPrediction = creditPredictor.PredictNextCredit(creditHistory, distributorBalance.CurrentBalance);
-            var anomalies = anomalyDetector.DetectSpendingAnomalies(spendingHistory);
-            var smartForecast = smartDepletion.GenerateForecast(
-                distributorBalance.CurrentBalance,
-                distributorBalance.RecommendedScenario?.DailyBurnRate ?? 0,
-                distributorBalance.RecommendedScenario?.DepletionDate ?? DateTime.Now,
-                creditHistory);
+            // Get ML training data
+            var creditHistory = await dataPrep.PrepareCreditDataAsync(entityId);
+            var spendingHistory = await dataPrep.PrepareSpendingDataAsync(entityId);
 
-            stopwatch.Stop();
-            System.Console.WriteLine($"✓ Analysis completed in {stopwatch.ElapsedMilliseconds}ms\n");
-
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-            System.Console.WriteLine("  TRADITIONAL MATHEMATICAL ANALYSIS");
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-            System.Console.WriteLine($"Current Balance: {distributorBalance.CurrentBalance:N2}");
-            System.Console.WriteLine($"Daily Burn Rate: {distributorBalance.RecommendedScenario?.DailyBurnRate:N2}");
-            System.Console.WriteLine($"Days Remaining: {distributorBalance.RecommendedScenario?.DaysRemaining}");
-            System.Console.WriteLine($"Depletion Date: {distributorBalance.RecommendedScenario?.DepletionDate:yyyy-MM-dd}");
-            System.Console.WriteLine();
-
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-            System.Console.WriteLine("  🤖 ML-ENHANCED PREDICTIONS");
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-
-            if (nextCreditPrediction != null)
+            if (creditHistory.Count >= 10)
             {
-                System.Console.WriteLine("📈 Next Credit Prediction:");
-                System.Console.WriteLine($"   Date: {nextCreditPrediction.PredictedDate:yyyy-MM-dd}");
-                System.Console.WriteLine($"   Amount: {nextCreditPrediction.PredictedAmount:N2}");
-                System.Console.WriteLine($"   Confidence: {nextCreditPrediction.Confidence:P0}");
-                System.Console.WriteLine();
-
-                System.Console.WriteLine("📈 Upcoming Credits (Next 5):");
-                foreach (var credit in smartForecast.PredictedCredits)
+                var nextCreditPrediction = creditPredictor.PredictNextCredit(creditHistory, distributorBalance.CurrentBalance);
+                
+                if (nextCreditPrediction != null)
                 {
-                    System.Console.WriteLine($"   {credit.PredictedDate:yyyy-MM-dd} - {credit.PredictedAmount:N2} (Confidence: {credit.Confidence:P0})");
+                    System.Console.WriteLine($"     🤖 Next Credit: {nextCreditPrediction.PredictedDate:yyyy-MM-dd} - {nextCreditPrediction.PredictedAmount:N2} ({nextCreditPrediction.Confidence:P0})");
                 }
-                System.Console.WriteLine();
-            }
 
-            System.Console.WriteLine("🎯 Smart Depletion Forecast:");
-            System.Console.WriteLine($"   Mathematical: {smartForecast.MathematicalDepletionDate:yyyy-MM-dd}");
-            System.Console.WriteLine($"   ML-Adjusted: {(smartForecast.AdjustedDepletionDate?.ToString("yyyy-MM-dd") ?? "Will not deplete")}");
-            System.Console.WriteLine($"   Will Deplete: {(smartForecast.WillDeplete ? "❌ YES" : "✅ NO")}");
-            System.Console.WriteLine($"   {smartForecast.Message}");
-            System.Console.WriteLine();
+                var smartForecast = smartDepletion.GenerateForecast(
+                    distributorBalance.CurrentBalance,
+                    distributorBalance.RecommendedScenario?.DailyBurnRate ?? 0,
+                    distributorBalance.RecommendedScenario?.DepletionDate ?? DateTime.Now,
+                    creditHistory);
 
-            var recentAnomalies = anomalies.Where(a => a.IsAnomaly && a.Date >= DateTime.Now.AddDays(-30)).OrderByDescending(a => a.Date).Take(5).ToList();
-
-            if (recentAnomalies.Any())
-            {
-                System.Console.WriteLine("⚠️  Spending Anomalies Detected (Last 30 Days):");
-                foreach (var anomaly in recentAnomalies)
+                if (smartForecast.WillDeplete && smartForecast.AdjustedDepletionDate.HasValue)
                 {
-                    System.Console.ForegroundColor = ConsoleColor.Yellow;
-                    System.Console.WriteLine($"   {anomaly.Date:yyyy-MM-dd} - Unusual spending pattern (Score: {anomaly.Score:F2})");
+                    System.Console.ForegroundColor = ConsoleColor.Red;
+                    System.Console.WriteLine($"     ⚠️  Depletion: {smartForecast.AdjustedDepletionDate:yyyy-MM-dd}");
                     System.Console.ResetColor();
                 }
-                System.Console.WriteLine();
-            }
-
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-            System.Console.WriteLine("  💡 RECOMMENDATION");
-            System.Console.WriteLine("═══════════════════════════════════════════════════════════");
-
-            if (smartForecast.WillDeplete && smartForecast.AdjustedDepletionDate.HasValue)
-            {
-                var daysUntil = (smartForecast.AdjustedDepletionDate.Value - DateTime.Now).Days;
-                System.Console.ForegroundColor = ConsoleColor.Red;
-                System.Console.WriteLine($"🚨 URGENT: Top up required before {smartForecast.AdjustedDepletionDate:yyyy-MM-dd} ({daysUntil} days)");
-                System.Console.ResetColor();
+                else
+                {
+                    System.Console.ForegroundColor = ConsoleColor.Green;
+                    System.Console.WriteLine($"     ✅ Healthy (maintained by predicted credits)");
+                    System.Console.ResetColor();
+                }
             }
             else
             {
-                System.Console.ForegroundColor = ConsoleColor.Green;
-                System.Console.WriteLine("✅ Balance is healthy with predicted credit patterns");
-                System.Console.WriteLine($"   Next top-up expected: {nextCreditPrediction?.PredictedDate:yyyy-MM-dd}");
+                System.Console.ForegroundColor = ConsoleColor.DarkGray;
+                System.Console.WriteLine($"     (Insufficient data for ML: {creditHistory.Count} credits)");
                 System.Console.ResetColor();
             }
 
-            System.Console.WriteLine("\nPress any key to exit...");
-            System.Console.ReadKey();
+            // Show recent anomalies
+            if (spendingHistory.Count >= 30)
+            {
+                var anomalies = anomalyDetector.DetectSpendingAnomalies(spendingHistory);
+                var recentAnomalies = anomalies.Where(a => a.IsAnomaly && a.Date >= DateTime.Now.AddDays(-30)).Count();
+                
+                if (recentAnomalies > 0)
+                {
+                    System.Console.ForegroundColor = ConsoleColor.Yellow;
+                    System.Console.WriteLine($"     ⚠️  {recentAnomalies} spending anomalies detected (last 30 days)");
+                    System.Console.ResetColor();
+                }
+            }
+
+            System.Console.WriteLine();
         }
     }
 }
