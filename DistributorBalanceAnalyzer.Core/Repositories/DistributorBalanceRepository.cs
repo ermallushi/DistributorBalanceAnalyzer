@@ -109,4 +109,57 @@ public class DistributorBalanceRepository
         var result = await command.ExecuteScalarAsync();
         return result?.ToString() ?? distributorId;
     }
+
+    /// <summary>
+    /// Gets raw transaction history for ML training
+    /// </summary>
+    public async Task<List<BalanceTransaction>> GetRawTransactionsAsync(string entityId, string? balanceEffect = null, int daysBack = 365)
+    {
+        var transactions = new List<BalanceTransaction>();
+
+        using var connection = new OracleConnection(_connectionString);
+        await connection.OpenAsync();
+
+        var sql = @"
+            SELECT t.transactionid, t.entityid, t.transactiondate, t.amount / 1000000 as amount,
+                   t.oldbalance / 1000000 as oldbalance, t.newbalance / 1000000 as newbalance,
+                   t.event, t.balanceeffect
+            FROM TBLTCREDITBALANCETRANSACTION t
+            WHERE t.entityid = :entityId AND t.transactiondate >= SYSDATE - :daysBack";
+
+        if (!string.IsNullOrEmpty(balanceEffect))
+        {
+            sql += " AND t.balanceeffect = :balanceEffect";
+        }
+
+        sql += " ORDER BY t.transactiondate ASC";
+
+        using var command = new OracleCommand(sql, connection);
+        command.Parameters.Add("entityId", OracleDbType.Varchar2).Value = entityId;
+        command.Parameters.Add("daysBack", OracleDbType.Int32).Value = daysBack;
+        
+        if (!string.IsNullOrEmpty(balanceEffect))
+        {
+            command.Parameters.Add("balanceEffect", OracleDbType.Varchar2).Value = balanceEffect;
+        }
+
+        using var reader = await command.ExecuteReaderAsync();
+        
+        while (await reader.ReadAsync())
+        {
+            transactions.Add(new BalanceTransaction
+            {
+                TransactionId = reader.GetInt64(0),
+                EntityId = reader.GetString(1),
+                TransactionDate = reader.GetDateTime(2),
+                Amount = reader.GetDecimal(3),
+                OldBalance = reader.GetDecimal(4),
+                NewBalance = reader.GetDecimal(5),
+                Event = reader.GetString(6),
+                BalanceEffect = reader.GetString(7)
+            });
+        }
+
+        return transactions;
+    }
 }
