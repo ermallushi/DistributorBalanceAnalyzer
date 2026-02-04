@@ -4,6 +4,7 @@ namespace DistributorBalanceAnalyzer.ML.Services
 {
     public class SmartDepletionService
     {
+        private const int MaxSimulationDays = 365;
         private readonly CreditPredictionService _creditPredictor;
 
         public SmartDepletionService(CreditPredictionService creditPredictor)
@@ -38,7 +39,7 @@ namespace DistributorBalanceAnalyzer.ML.Services
             DateTime? adjustedDepletionDate = null;
             var willDeplete = true;
 
-            for (int day = 0; day < 365; day++)
+            for (int day = 0; day < MaxSimulationDays; day++)
             {
                 var checkDate = currentDate.AddDays(day);
                 simulatedBalance -= dailyBurnRate;

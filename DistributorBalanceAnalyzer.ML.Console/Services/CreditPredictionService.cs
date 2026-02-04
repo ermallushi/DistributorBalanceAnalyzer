@@ -67,7 +67,7 @@ namespace DistributorBalanceAnalyzer.ML.Services
             {
                 PredictedDate = predictedDate,
                 PredictedAmount = prediction.ForecastedCredits[0],
-                Confidence = 1.0f - Math.Abs(prediction.UpperBound[0] - prediction.LowerBound[0]) / Math.Max(prediction.ForecastedCredits[0], 1)
+                Confidence = Math.Max(0, Math.Min(1, 1.0f - Math.Abs(prediction.UpperBound[0] - prediction.LowerBound[0]) / Math.Max(prediction.ForecastedCredits[0], 1)))
             };
         }
 
@@ -96,11 +96,13 @@ namespace DistributorBalanceAnalyzer.ML.Services
             var predictions = new List<CreditPrediction>();
             for (int i = 0; i < Math.Min(5, prediction.ForecastedCredits.Length); i++)
             {
+                // Confidence decreases exponentially with forecast distance
+                var confidence = 0.95f * (float)Math.Pow(0.85, i);
                 predictions.Add(new CreditPrediction
                 {
                     PredictedDate = lastDate.AddDays(avgDaysBetween * (i + 1)),
                     PredictedAmount = prediction.ForecastedCredits[i],
-                    Confidence = 0.95f - (i * 0.1f)
+                    Confidence = confidence
                 });
             }
 

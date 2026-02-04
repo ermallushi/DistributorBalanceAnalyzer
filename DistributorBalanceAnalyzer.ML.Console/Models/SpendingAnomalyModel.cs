@@ -13,6 +13,8 @@ namespace DistributorBalanceAnalyzer.ML.Models
 
     public class AnomalyPrediction
     {
+        // ML.NET outputs prediction result to 'PredictedLabel' column
+        // which we map to a more descriptive property name
         [ColumnName("PredictedLabel")]
         public bool IsAnomaly { get; set; }
         
