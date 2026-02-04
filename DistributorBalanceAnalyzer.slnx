@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="DistributorBalanceAnalyzer.Api/DistributorBalanceAnalyzer.Api.csproj" />
+  <Project Path="DistributorBalanceAnalyzer.Console/DistributorBalanceAnalyzer.Console.csproj" />
+  <Project Path="DistributorBalanceAnalyzer.Core/DistributorBalanceAnalyzer.Core.csproj" />
+</Solution>
