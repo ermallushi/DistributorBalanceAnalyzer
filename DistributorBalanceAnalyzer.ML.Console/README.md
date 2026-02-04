@@ -74,12 +74,14 @@ The application displays hierarchical analysis:
 
 ### Hierarchy Levels
 
-- **Level 1**: Distributor's own balance (direct account)
-- **Level 2**: Direct sub-distributors (first-tier network)
-- **Level 3**: Indirect sub-distributors (second-tier network)
-- **Level 4+**: Additional network levels (if present)
+The hierarchy represents the **downline network** (not upline):
 
-The application automatically detects the hierarchy structure using Oracle's `CONNECT BY` hierarchical queries. If no hierarchy exists (single-level structure), it analyzes only the distributor's own balance.
+- **Level 1**: The distributor's own account (starting point)
+- **Level 2**: Direct downlines (distributors recruited by Level 1)
+- **Level 3**: Second-level downlines (distributors recruited by Level 2)
+- **Level 4+**: Additional downline levels (if present)
+
+The application uses Oracle's `CONNECT BY parentaccountid = PRIOR accountid` to traverse **down** the distributor network, showing the distributor's entire downline organization. If no hierarchy exists (single-level structure), it analyzes only the distributor's own balance.
 
 ## Requirements
 
@@ -223,7 +225,8 @@ Total Credits: 3,373,000.00
 
 ## Notes
 
-- **Hierarchy Detection**: The system uses Oracle's `CONNECT BY` to traverse parent-child relationships in `tblmaccount`
+- **Hierarchy Direction**: The system traverses **DOWN** the distributor network using `CONNECT BY parentaccountid = PRIOR accountid` to find all downlines (children, grandchildren, etc.)
+- **Hierarchy Detection**: Uses Oracle's hierarchical queries to traverse parent-child relationships in `tblmaccount`
 - **Graceful Fallback**: If the database doesn't support hierarchy (no `parentaccountid` column), the system analyzes only the distributor's own balance (single level)
 - ML models require sufficient historical data for accurate predictions (minimum 10 credits)
 - Confidence scores decrease for longer-term predictions

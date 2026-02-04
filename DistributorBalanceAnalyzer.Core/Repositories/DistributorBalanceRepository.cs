@@ -122,12 +122,13 @@ public class DistributorBalanceRepository
 
         // Use Oracle hierarchical query to get all descendants organized by level
         // This assumes tblmaccount has parentaccountid column for hierarchy
-        // If the schema is different, this query will need adjustment
+        // CONNECT BY parentaccountid = PRIOR accountid means: find children where their parent is the current node
+        // This traverses DOWN the hierarchy (distributor -> downlines -> their downlines, etc.)
         var hierarchySql = @"
             SELECT LEVEL as hierarchy_level, accountid
             FROM tblmaccount
             START WITH accountid = :distributorId
-            CONNECT BY PRIOR accountid = parentaccountid
+            CONNECT BY parentaccountid = PRIOR accountid
             AND LEVEL <= :maxLevels
             ORDER BY LEVEL, accountid";
 
